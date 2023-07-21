@@ -11,7 +11,7 @@ class Tracker:
 
 
     def update(self, objects_rect):
-        # Objects boxes and ids
+        # Objects bounding boxes and ids
         objects_bbs_ids = []
 
         # Get center point of new object
@@ -23,9 +23,11 @@ class Tracker:
             # Find out if that object was detected already
             same_object_detected = False
             for id, pt in self.center_points.items():
+                #if distance from other object is less than dist, then it is the same object
                 dist = math.hypot(cx - pt[0], cy - pt[1])
 
                 if dist < 35:
+                    #update record of id and coordinates
                     self.center_points[id] = (cx, cy)
 #                    print(self.center_points)
                     objects_bbs_ids.append([x, y, w, h, id])
