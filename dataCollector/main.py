@@ -36,19 +36,16 @@ from serializer import Serializer
 data = Serializer()
 
 # import pretrained model
+print('[INFO] Importing YOLOv8s.')
 model = YOLO('data/yolov8s.pt')
 
 #uncomment to process video
-# change based on video
+#change based on video
 #video_name = "sample2.mp4"
 
 #uncomment to process video
+print('[INFO] Connecting to camera.')
 camera = Camera(1)
-
-# open classifiers file
-my_file = open("data/coco.txt", "r")
-file_data = my_file.read()
-class_list = file_data.split("\n") 
 
 # initialize count
 count = 0
@@ -58,19 +55,19 @@ tracker = Tracker()
 
 # height (y) points of the 2 lines
 #tips:
-#video res = 1080,1920 => car_height1 = 1060,car_height2=1100
-#video res = 1920,1080 => car_height1 = 460,car_height2= 500
-car_height1 = 300  # 1st line - change based on the video
-car_height2 = car_height1 + 40  # 2nd line - change based on the video (always keep 40 difference with above for better results)
-
+#video res = 1080,1920 => line_up = 1060,car_height2=1100
+#video res = 1920,1080 => line_up = 460,car_height2= 500
+line_up = 300  # 1st line - change based on the video
+car_height2 = line_up + 40  # 2nd line - change based on the video (always keep 40 difference with above for better results)
+#distance threshold from lines:
 offset = 6
 
-# list to store vehicles' id that are going down
+# box_list to store vehicles' id that are going down
 vh_down = {}
 # counter_d for the down vehicles
 counter_d = []
 
-# list to store vehicles' id that are going up
+# box_list to store vehicles' id that are going up
 vh_up = {}
 # counter_d for the up vehicles
 counter_u = []
@@ -94,31 +91,16 @@ while True:
     #    print("Image is empty or couldn't be retrieved. Check the URL or the server.")
     #    continue
 
-    #count += 1
-    #if count % 3 != 0:
-    #    continue
-    
     frame = camera.getFrame()
-    
     #predict from frame 
     results = model.predict(frame)
     #predict from camera
     #results = model.predict(source=1)
 
     a = results[0].boxes.data
-    px = pd.DataFrame(a).astype("float")
+    boxes_data = pd.DataFrame(a).astype("float")
 
-    list = []
-    for index, row in px.iterrows():
-        d = int(row[5])
-        c = class_list[d]
-        if 'car' in c:
-            x1 = int(row[0])
-            y1 = int(row[1])
-            x2 = int(row[2])
-            y2 = int(row[3])
-            list.append([x1, y1, x2, y2])
-    bbox_id = tracker.update(list)
+    bbox_id = tracker.update(boxes_data)
     for bbox in bbox_id:
         x3, y3, x4, y4, id = bbox
         car_x = int(x3 + x4) // 2
@@ -128,7 +110,7 @@ while True:
 
         # going DOWN
         #if car passed through UP line, add to vh_down
-        if car_height1 < (car_y + offset) and car_height1 > (car_y - offset):
+        if line_up < (car_y + offset) and line_up > (car_y - offset):
             vh_down[id] = time.time()
         #
         if id in vh_down:
@@ -150,7 +132,7 @@ while True:
         if car_height2 < (car_y + offset) and car_height2 > (car_y - offset):
             vh_up[id] = time.time()
         if id in vh_up:
-            if car_height1 < (car_y + offset) and car_height1 > (car_y - offset):
+            if line_up < (car_y + offset) and line_up > (car_y - offset):
                 elapsed1_time = time.time() - vh_up[id]
                 if counter_u.count(id) == 0:
                     counter_u.append(id)
@@ -183,8 +165,8 @@ while True:
     u = len(counter_u)  # counter_u for up
 
     cv2.putText(frame, ('goingup:-') + str(u), (60, 130), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 0), 2)
-    cv2.putText(frame, ('UP'), (0, car_height1), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 0), 2)
-    cv2.line(frame, (0, car_height1), (camera.width, car_height1), (0, 255, 0), 2)
+    cv2.putText(frame, ('UP'), (0, line_up), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 0), 2)
+    cv2.line(frame, (0, line_up), (camera.width, line_up), (0, 255, 0), 2)
 
     cv2.putText(frame, ('goingdown:-') + str(d), (60, 90), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
     cv2.putText(frame, ('DOWN'), (0, car_height2), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
@@ -195,7 +177,10 @@ while True:
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
+print('[INFO] Closing.')
 cv2.destroyAllWindows()
 camera.close()
+
 # Save data to csv file
+print('[INFO] Saving data.')
 data.save()

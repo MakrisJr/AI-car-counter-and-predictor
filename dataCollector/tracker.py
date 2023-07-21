@@ -5,17 +5,34 @@ class Tracker:
     def __init__(self):
         # Store the center positions of the objects
         self.center_points = {}
+
         # Keep the count of the IDs
         # each time a new object id detected, the count will increase by one
         self.id_count = 0
 
+        # open classifiers file
+        my_file = open("data/coco.txt", "r")
+        file_data = my_file.read()
+        self.class_list = file_data.split("\n") 
 
-    def update(self, objects_rect):
+    def update(self, boxes_data):
+        box_list = []
+        for _, row in boxes_data.iterrows():
+            d = int(row[5])
+            c = self.class_list[d]
+            if 'car' in c:
+                x1 = int(row[0])
+                y1 = int(row[1])
+                x2 = int(row[2])
+                y2 = int(row[3])
+                box_list.append([x1, y1, x2, y2])
+
+
         # Objects bounding boxes and ids
         objects_bbs_ids = []
 
         # Get center point of new object
-        for rect in objects_rect:
+        for rect in box_list:
             x, y, w, h = rect
             cx = (x + x + w) // 2
             cy = (y + y + h) // 2
