@@ -1,5 +1,6 @@
 import math
-
+import numpy as np
+import supervision as sv
 
 class Tracker:
     def __init__(self):
@@ -14,6 +15,7 @@ class Tracker:
         my_file = open("data/coco.txt", "r")
         file_data = my_file.read()
         self.class_list = file_data.split("\n") 
+
 
     def update(self, boxes_data):
         box_list = []
@@ -67,3 +69,109 @@ class Tracker:
         # Update dictionary with IDs not used removed
         self.center_points = new_center_points.copy()
         return objects_bbs_ids
+    
+class ZoneTracker():
+    def __init__(self, model, video_info):
+        self.model = model
+        # Store the center positions of the objects
+        self.id_count = 0
+
+        # Keep the count of the IDs
+        # each time a new object id detected, the count will increase by one
+        self.center_points = {}
+
+        self.count = [0, 0]
+        # open classifiers file
+        my_file = open("data/coco.txt", "r")
+        file_data = my_file.read()
+        self.class_list = file_data.split("\n") 
+
+        self.video_info = video_info
+        colors = sv.ColorPalette.default()
+        polygons = [
+            np.array([
+            [894, 1060],[78, 1056],[194, 724],[938, 740]
+            ]),np.array([
+            [1026, 1032],[1866, 1032],[1826, 724],[978, 756]
+            ])
+        ]
+
+        # initialize our zones
+        self.zones = [
+            sv.PolygonZone(
+                polygon=polygon, 
+                frame_resolution_wh=video_info.resolution_wh
+            ) for polygon in polygons
+        ]
+        self.zone_annotators = [
+            sv.PolygonZoneAnnotator(
+                zone=zone, 
+                color=colors.by_idx(index), 
+                thickness=4,
+                text_thickness=8,
+                text_scale=4
+            ) for index, zone in enumerate(self.zones)
+        ]
+
+        self.box_annotators = [
+            sv.BoxAnnotator(
+                color=colors.by_idx(index), 
+                thickness=4, 
+                text_thickness=4, 
+                text_scale=2
+            ) for index in range(len(polygons))
+        ]
+        
+
+        self.frame = None
+
+    def update(self, frame, detections):
+        ids_seen = []
+        for i, (zone, zone_annotator, box_annotator) in enumerate(zip(self.zones, self.zone_annotators, self.box_annotators)):
+            mask = zone.trigger(detections=detections)
+            detections_filtered = detections[mask]
+            labels = [
+                f"{self.model.model.names[class_id]} {confidence:0.2f}"
+                for _, _, confidence, class_id, _ 
+                in detections_filtered
+            ]
+            
+            frame = box_annotator.annotate(scene=frame, detections=detections_filtered, labels=labels)
+            frame = zone_annotator.annotate(scene=frame)
+
+            for x1,y1,x2,y2 in detections_filtered.xyxy:
+                cx = (x1 + x2) // 2
+                cy = (y1 + y2) // 2
+
+                same_object_detected = False
+                for id, pt in self.center_points.items():
+                    dist = math.hypot(cx - pt[0], cy - pt[1])
+
+                    if dist < 100:
+                        same_object_detected = True
+                        #update record of id and coordinates
+                        self.center_points.update({self.id_count : (cx, cy)})
+                        #print(self.center_points)
+                        ids_seen.append(id)
+                        break
+  
+                if same_object_detected is False:
+                    self.count[i] += 1
+                    self.center_points.update({self.id_count : (cx, cy)})
+                    ids_seen.append(self.id_count)
+                    self.id_count += 1
+
+        # Clean the dictionary by center points to remove IDS not used anymore
+        # Update dictionary with IDs not used removed
+        self.center_points = {k : self.center_points[k] for k in ids_seen}
+        self.frame = frame
+        print("ID: " + str(self.id_count))
+
+
+    def getAnnotatedFrame(self):
+        return self.frame
+    
+    def getCount(self):
+        return self.count
+    
+
