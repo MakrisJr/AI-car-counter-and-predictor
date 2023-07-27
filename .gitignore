@@ -1,3 +1,4 @@
 data/yolov8l.pt
 data/yolov8n.pt
 data/yolov8x.pt
+dataCollector/ByteTrack
